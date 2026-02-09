@@ -21,7 +21,15 @@ This MCP server enables your entire team to access Meta advertising data through
 - Meta Business Manager account
 - Meta Graph API access token
 
-### Installation
+### Easy Installation (Recommended)
+
+Run this command in your terminal to set up everything automatically:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Sola-Wood-Flowers/meta-mcp-server/main/install.sh | bash
+```
+
+### Manual Installation
 
 1. **Clone or download** this repository
 2. **Install dependencies:**
