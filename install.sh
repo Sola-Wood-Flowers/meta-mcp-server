@@ -14,6 +14,46 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}=== Meta Ads MCP Server Installer ===${NC}"
 
+# Check for Git
+if ! command -v git &> /dev/null; then
+    echo -e "${RED}Error: git is not installed.${NC}"
+    echo "Please install git and try again."
+    exit 1
+fi
+
+# 0. Check context and Clone if needed (Standalone Mode)
+if [ ! -f "requirements.txt" ] && [ ! -f "meta_ads_mcp.py" ]; then
+    echo -e "${BLUE}[0/5] Bootstrapping...${NC}"
+    echo -e "${YELLOW}Running in standalone mode. Cloning repository...${NC}"
+    
+    TARGET_DIR="meta-mcp-server"
+    
+    if [ -d "$TARGET_DIR" ]; then
+        echo -e "${YELLOW}Directory '$TARGET_DIR' already exists.${NC}"
+        # Prompt for overwrite, reading from TTY to support pipe
+        echo -n "Directory exists. Overwrite? (y/n): "
+        if [ -t 0 ]; then
+            read -r OVERWRITE
+        else
+            read -r OVERWRITE < /dev/tty
+        fi
+        
+        if [[ "$OVERWRITE" =~ ^[Yy]$ ]]; then
+            rm -rf "$TARGET_DIR"
+            echo -e "${YELLOW}Removed existing directory.${NC}"
+        else
+            echo -e "${GREEN}Using existing directory.${NC}"
+        fi
+    fi
+    
+    if [ ! -d "$TARGET_DIR" ]; then
+        git clone https://github.com/Sola-Wood-Flowers/meta-mcp-server.git "$TARGET_DIR"
+    fi
+    
+    cd "$TARGET_DIR"
+    echo -e "${GREEN}✓ Repository ready in ./$TARGET_DIR${NC}"
+fi
+
 # 1. Check Prerequisites
 echo -e "\n${BLUE}[1/5] Checking prerequisites...${NC}"
 
@@ -62,7 +102,12 @@ ENV_FILE=".env"
 
 if [ -f "$ENV_FILE" ]; then
     echo -e "${YELLOW}.env file already exists.${NC}"
-    read -p "Do you want to update the token? (y/n): " UPDATE_TOKEN
+    echo -n "Do you want to update the token? (y/n): "
+    if [ -t 0 ]; then
+        read -r UPDATE_TOKEN
+    else
+        read -r UPDATE_TOKEN < /dev/tty
+    fi
 else
     UPDATE_TOKEN="y"
 fi
@@ -70,7 +115,12 @@ fi
 if [[ "$UPDATE_TOKEN" =~ ^[Yy]$ ]]; then
     echo -e "\nPlease enter your Meta Access Token."
     echo "You can get one from: https://developers.facebook.com/tools/explorer/"
-    read -p "Token: " META_TOKEN
+    echo -n "Token: "
+    if [ -t 0 ]; then
+        read -r META_TOKEN
+    else
+        read -r META_TOKEN < /dev/tty
+    fi
 
     if [ -z "$META_TOKEN" ]; then
         echo -e "${YELLOW}No token entered. Skipping .env creation.${NC}"
