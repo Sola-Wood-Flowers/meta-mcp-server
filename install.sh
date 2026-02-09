@@ -14,29 +14,36 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}=== Meta Ads MCP Server Installer ===${NC}"
 
-# Check for Git
-if ! command -v git &> /dev/null; then
-    echo -e "${RED}Error: git is not installed.${NC}"
-    echo "Please install git and try again."
-    exit 1
-fi
+# Helper function to read input safely
+ask_user() {
+    local prompt="$1"
+    if [ -t 0 ]; then
+        read -r -p "$prompt" REPLY
+    else
+        read -r -p "$prompt" REPLY < /dev/tty
+    fi
+    echo "$REPLY"
+}
 
 # 0. Check context and Clone if needed (Standalone Mode)
 if [ ! -f "requirements.txt" ] && [ ! -f "meta_ads_mcp.py" ]; then
-    echo -e "${BLUE}[0/5] Bootstrapping...${NC}"
+    echo -e "${BLUE}[0/6] Bootstrapping...${NC}"
+    
+    # Check for git first
+    if ! command -v git &> /dev/null; then
+        echo -e "${RED}Error: git is not installed.${NC}"
+        echo "Please install git and try again."
+        exit 1
+    fi
+
     echo -e "${YELLOW}Running in standalone mode. Cloning repository...${NC}"
     
     TARGET_DIR="meta-mcp-server"
     
     if [ -d "$TARGET_DIR" ]; then
         echo -e "${YELLOW}Directory '$TARGET_DIR' already exists.${NC}"
-        # Prompt for overwrite, reading from TTY to support pipe
-        echo -n "Directory exists. Overwrite? (y/n): "
-        if [ -t 0 ]; then
-            read -r OVERWRITE
-        else
-            read -r OVERWRITE < /dev/tty
-        fi
+        echo -n "Overwrite? (y/n): "
+        if [ -t 0 ]; then read -r OVERWRITE; else read -r OVERWRITE < /dev/tty; fi
         
         if [[ "$OVERWRITE" =~ ^[Yy]$ ]]; then
             rm -rf "$TARGET_DIR"
@@ -54,40 +61,81 @@ if [ ! -f "requirements.txt" ] && [ ! -f "meta_ads_mcp.py" ]; then
     echo -e "${GREEN}✓ Repository ready in ./$TARGET_DIR${NC}"
 fi
 
-# 1. Check Prerequisites
-echo -e "\n${BLUE}[1/5] Checking prerequisites...${NC}"
+# 1. Install Python if missing (macOS/Linux)
+echo -e "\n${BLUE}[1/6] Checking system requirements...${NC}"
+
+install_python() {
+    OS="$(uname -s)"
+    if [[ "$OS" == "Darwin" ]]; then
+        if command -v brew &> /dev/null; then
+            echo -e "${YELLOW}Installing Python via Homebrew...${NC}"
+            brew install python
+        else
+            echo -e "${RED}Error: Python 3 not found and Homebrew is missing.${NC}"
+            echo "Please install Homebrew (https://brew.sh) or Python 3 manually."
+            exit 1
+        fi
+    elif [[ "$OS" == "Linux" ]]; then
+        if command -v apt-get &> /dev/null; then
+            echo -e "${YELLOW}Installing Python via apt...${NC}"
+            sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-venv
+        else
+            echo -e "${RED}Error: Python 3 not found and could not detect apt.${NC}"
+            echo "Please install Python 3 manually."
+            exit 1
+        fi
+    else
+        echo -e "${RED}Error: Python 3 not found.${NC}"
+        echo "Please install Python 3 manually."
+        exit 1
+    fi
+}
 
 if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}Error: python3 is not installed.${NC}"
-    echo "Please install Python 3.10 or higher and try again."
-    exit 1
+    echo -e "${YELLOW}Python 3 not found. Attempting to install...${NC}"
+    install_python
+else
+    # Check version
+    PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
+    PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
+    
+    if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]); then
+        echo -e "${YELLOW}Python version $PY_VERSION is too old (need 3.10+). Attempting upgrade...${NC}"
+        install_python
+    else
+        echo -e "${GREEN}✓ Python $PY_VERSION found.${NC}"
+    fi
 fi
 
+# Ensure pip is available
 if ! command -v pip3 &> /dev/null; then
-    echo -e "${RED}Error: pip3 is not installed.${NC}"
-    echo "Please install pip3 and try again."
-    exit 1
+    echo -e "${YELLOW}pip3 not found. Installing...${NC}"
+    install_python
 fi
-
-echo -e "${GREEN}✓ Python and pip found.${NC}"
 
 # 2. Create Virtual Environment
-echo -e "\n${BLUE}[2/5] Setting up virtual environment...${NC}"
+echo -e "\n${BLUE}[2/6] Setting up virtual environment...${NC}"
 
 if [ -d "venv" ]; then
-    echo -e "${YELLOW}Virtual environment 'venv' already exists. Skipping creation.${NC}"
-else
-    python3 -m venv venv
-    echo -e "${GREEN}✓ Virtual environment created.${NC}"
+    echo -e "${YELLOW}Virtual environment 'venv' already exists. Recreating to ensure clean state...${NC}"
+    rm -rf venv
 fi
+
+python3 -m venv venv
+echo -e "${GREEN}✓ Virtual environment created.${NC}"
 
 # Activate venv
 source venv/bin/activate
 
-# 3. Install Dependencies
-echo -e "\n${BLUE}[3/5] Installing dependencies...${NC}"
+# 3. Upgrade pip and Install Dependencies
+echo -e "\n${BLUE}[3/6] Installing dependencies...${NC}"
+
+echo "Upgrading pip..."
+pip install --upgrade pip
 
 if [ -f "requirements.txt" ]; then
+    echo "Installing requirements..."
     pip install -r requirements.txt
     echo -e "${GREEN}✓ Dependencies installed.${NC}"
 else
@@ -96,34 +144,28 @@ else
 fi
 
 # 4. Configure Meta Access Token
-echo -e "\n${BLUE}[4/5] Configuring Meta Access Token...${NC}"
+echo -e "\n${BLUE}[4/6] Configuring Meta Access Token...${NC}"
 
 ENV_FILE=".env"
+UPDATE_TOKEN="y"
 
 if [ -f "$ENV_FILE" ]; then
     echo -e "${YELLOW}.env file already exists.${NC}"
     echo -n "Do you want to update the token? (y/n): "
-    if [ -t 0 ]; then
-        read -r UPDATE_TOKEN
-    else
-        read -r UPDATE_TOKEN < /dev/tty
-    fi
-else
-    UPDATE_TOKEN="y"
+    if [ -t 0 ]; then read -r UPDATE_TOKEN; else read -r UPDATE_TOKEN < /dev/tty; fi
 fi
 
 if [[ "$UPDATE_TOKEN" =~ ^[Yy]$ ]]; then
     echo -e "\nPlease enter your Meta Access Token."
     echo "You can get one from: https://developers.facebook.com/tools/explorer/"
     echo -n "Token: "
-    if [ -t 0 ]; then
-        read -r META_TOKEN
-    else
-        read -r META_TOKEN < /dev/tty
-    fi
+    if [ -t 0 ]; then read -r META_TOKEN; else read -r META_TOKEN < /dev/tty; fi
 
     if [ -z "$META_TOKEN" ]; then
-        echo -e "${YELLOW}No token entered. Skipping .env creation.${NC}"
+        if [ ! -f "$ENV_FILE" ]; then
+             echo -e "${YELLOW}No token entered. Creating empty .env${NC}"
+             touch "$ENV_FILE"
+        fi
     else
         echo "META_ACCESS_TOKEN=$META_TOKEN" > "$ENV_FILE"
         echo -e "${GREEN}✓ Token saved to .env${NC}"
@@ -131,19 +173,18 @@ if [[ "$UPDATE_TOKEN" =~ ^[Yy]$ ]]; then
 fi
 
 # 5. Configure Claude Desktop
-echo -e "\n${BLUE}[5/5] Configuring Claude Desktop...${NC}"
+echo -e "\n${BLUE}[5/6] Configuring Claude Desktop...${NC}"
 
 # Detect OS and set config path
-OS="$(uname)"
+OS="$(uname -s)"
 if [[ "$OS" == "Darwin" ]]; then
     CONFIG_DIR="$HOME/Library/Application Support/Claude"
 elif [[ "$OS" == "Linux" && -d "/mnt/c/Users" ]]; then
-    # WSL support - trying to find Windows Claude config
+    # WSL support
     WIN_USER=$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
     CONFIG_DIR="/mnt/c/Users/$WIN_USER/AppData/Roaming/Claude"
-    echo -e "${YELLOW}WSL detected. Attempting to configure Windows Claude Desktop for user: $WIN_USER${NC}"
+    echo -e "${YELLOW}WSL detected. Configuring for Windows user: $WIN_USER${NC}"
 else
-    # Linux native (rare for Claude Desktop currently, but falling back to standard XDG)
     CONFIG_DIR="$HOME/.config/Claude"
 fi
 
@@ -152,19 +193,17 @@ CONFIG_FILE="$CONFIG_DIR/claude_desktop_config.json"
 # Get absolute path to the script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 MCP_SCRIPT_PATH="$SCRIPT_DIR/meta_ads_mcp.py"
-PYTHON_PATH="$SCRIPT_DIR/venv/bin/python"
+PYTHON_PATH="$SCRIPT_DIR/venv/bin/python" # Use venv python
 
 # Check if config exists
 if [ ! -d "$CONFIG_DIR" ]; then
-    echo -e "${YELLOW}Claude Desktop configuration directory not found at: $CONFIG_DIR${NC}"
-    echo "Creating directory..."
+    echo -e "${YELLOW}Config directory not found. Creating: $CONFIG_DIR${NC}"
     mkdir -p "$CONFIG_DIR"
 fi
 
-echo "Configuring Claude Desktop at: $CONFIG_FILE"
+echo "Configuring: $CONFIG_FILE"
 
 # Prepare the JSON snippet for this server
-# We use python to safely handle JSON manipulation
 python3 -c "
 import json
 import os
