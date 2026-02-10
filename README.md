@@ -23,11 +23,13 @@ This MCP server enables your entire team to access Meta advertising data through
 
 ### Easy Installation (Recommended)
 
-Run this command in your terminal to set up everything automatically:
+Run this command in your terminal to set up everything automatically (installs Python, dependencies, and configures Claude):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Sola-Wood-Flowers/meta-mcp-server/main/install.sh | bash
 ```
+
+**Note:** You must completely restart Claude Desktop (Cmd+Q) after installation for changes to take effect.
 
 ### Manual Installation
 
