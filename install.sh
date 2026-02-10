@@ -210,6 +210,15 @@ fi
 
 echo "Configuring: $CONFIG_FILE"
 
+# Load environment variables from .env if it exists
+if [ -f "$ENV_FILE" ]; then
+    echo "Loading configuration from $ENV_FILE..."
+    # Export variables from .env so python script can see them
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
 # Prepare the JSON snippet for this server
 python3 -c "
 import json
@@ -221,6 +230,9 @@ server_name = 'meta-ads'
 python_path = '$PYTHON_PATH'
 script_path = '$MCP_SCRIPT_PATH'
 meta_token = os.getenv('META_ACCESS_TOKEN', '')
+
+if not meta_token:
+    print('Warning: META_ACCESS_TOKEN not found in environment.')
 
 # Load existing config or create new
 config = {}
