@@ -198,7 +198,8 @@ fi
 CONFIG_FILE="$CONFIG_DIR/claude_desktop_config.json"
 
 # Get absolute path to the script
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Use pwd instead of BASH_SOURCE to be robust in piped execution
+SCRIPT_DIR="$(pwd)"
 MCP_SCRIPT_PATH="$SCRIPT_DIR/meta_ads_mcp.py"
 PYTHON_PATH="$SCRIPT_DIR/venv/bin/python" # Use venv python
 
