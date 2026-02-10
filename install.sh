@@ -17,6 +17,7 @@ echo -e "${BLUE}=== Meta Ads MCP Server Installer ===${NC}"
 # Helper function to read input safely
 ask_user() {
     local prompt="$1"
+    # read -p outputs prompt to stderr, so it won't be captured by $()
     if [ -t 0 ]; then
         read -r -p "$prompt" REPLY
     else
@@ -42,8 +43,7 @@ if [ ! -f "requirements.txt" ] && [ ! -f "meta_ads_mcp.py" ]; then
     
     if [ -d "$TARGET_DIR" ]; then
         echo -e "${YELLOW}Directory '$TARGET_DIR' already exists.${NC}"
-        echo -n "Overwrite? (y/n): "
-        if [ -t 0 ]; then read -r OVERWRITE; else read -r OVERWRITE < /dev/tty; fi
+        OVERWRITE=$(ask_user "Overwrite? (y/n): ")
         
         if [[ "$OVERWRITE" =~ ^[Yy]$ ]]; then
             rm -rf "$TARGET_DIR"
@@ -69,7 +69,15 @@ install_python() {
     if [[ "$OS" == "Darwin" ]]; then
         if command -v brew &> /dev/null; then
             echo -e "${YELLOW}Installing Python via Homebrew...${NC}"
-            brew install python
+            # Redirect stdin to prevent brew from eating the pipe
+            brew install python < /dev/null
+            
+            # Add Homebrew python to PATH for this session if needed
+            if [ -f "/opt/homebrew/bin/python3" ]; then
+                export PATH="/opt/homebrew/bin:$PATH"
+            elif [ -f "/usr/local/bin/python3" ]; then
+                export PATH="/usr/local/bin:$PATH"
+            fi
         else
             echo -e "${RED}Error: Python 3 not found and Homebrew is missing.${NC}"
             echo "Please install Homebrew (https://brew.sh) or Python 3 manually."
@@ -78,7 +86,8 @@ install_python() {
     elif [[ "$OS" == "Linux" ]]; then
         if command -v apt-get &> /dev/null; then
             echo -e "${YELLOW}Installing Python via apt...${NC}"
-            sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-venv
+            # Redirect stdin to prevent apt from eating the pipe
+            sudo apt-get update < /dev/null && sudo apt-get install -y python3 python3-pip python3-venv < /dev/null
         else
             echo -e "${RED}Error: Python 3 not found and could not detect apt.${NC}"
             echo "Please install Python 3 manually."
@@ -151,15 +160,13 @@ UPDATE_TOKEN="y"
 
 if [ -f "$ENV_FILE" ]; then
     echo -e "${YELLOW}.env file already exists.${NC}"
-    echo -n "Do you want to update the token? (y/n): "
-    if [ -t 0 ]; then read -r UPDATE_TOKEN; else read -r UPDATE_TOKEN < /dev/tty; fi
+    UPDATE_TOKEN=$(ask_user "Do you want to update the token? (y/n): ")
 fi
 
 if [[ "$UPDATE_TOKEN" =~ ^[Yy]$ ]]; then
     echo -e "\nPlease enter your Meta Access Token."
     echo "You can get one from: https://developers.facebook.com/tools/explorer/"
-    echo -n "Token: "
-    if [ -t 0 ]; then read -r META_TOKEN; else read -r META_TOKEN < /dev/tty; fi
+    META_TOKEN=$(ask_user "Token: ")
 
     if [ -z "$META_TOKEN" ]; then
         if [ ! -f "$ENV_FILE" ]; then
